@@ -1,64 +1,72 @@
-```markdown
 # 旋转离心坍落度测定仪中期改进方案系统框架图
+
+此框架图展示了从硬件感知到机器学习融合预测的完整技术路线。
 
 ```mermaid
 graph TD
-    %% 定义样式类
-    classDef hardware fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;
-    classDef legacySensors fill:#fff,stroke:#01579b,stroke-dasharray: 5 5,color:#01579b;
-    classDef upCamera fill:#fff,stroke:#01579b,color:#01579b;
-    classDef data_p fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
-    classDef feature_vec fill:#a5d6a7,stroke:#1b5e20,color:#fff;
-    classDef algo fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100;
-    classDef script fill:#ffe0b2,stroke:#e65100,color:#e65100;
-    classDef algo_model fill:#ffcc80,stroke:#e65100,color:#fff;
-    classDef output_f fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#880e4f;
+    %% 1. 定义全局样式
+    classDef hardware fill:#f0f7ff,stroke:#005cc5,stroke-width:2px,color:#005cc5;
+    classDef legacy fill:#ffffff,stroke:#005cc5,stroke-width:1px,stroke-dasharray: 5 5,color:#005cc5;
+    classDef software fill:#f6ffed,stroke:#52c41a,stroke-width:2px,color:#1b5e20;
+    classDef feature fill:#b7eb8f,stroke:#52c41a,color:#1b5e20;
+    classDef model fill:#fff7e6,stroke:#fa8c16,stroke-width:2px,color:#d46b08;
+    classDef result fill:#fff0f6,stroke:#eb2f96,stroke-width:2px,color:#9e1068;
 
+    %% 2. 物理输入与感知层
     subgraph I_Phys [I. 物理输入与感知层]
-        I_HW1[搅拌机内部水泥表面]
-        I_HW2[电机驱动转盘]
+        I_Target[水泥表面状态]:::hardware
+        I_Motor[电机驱动转盘]:::hardware
         
-        subgraph I_LegSens [短期方案保留]
-            I_Sens1(多点高度传感器)
-            I_Sens2(扭矩传感器)
-            I_Sens3(温度传感器)
+        subgraph I_LegSens [短期方案传感器]
+            I_S1(多点高度传感器)
+            I_S2(扭矩传感器)
+            I_S3(温度传感器)
         end
         
         subgraph I_UpCam [中期硬件升级]
-            I_Cam(立体视觉相机)
+            I_Cam(Intel RealSense 相机)
         end
     end
-    
-    subgraph II_Data [II. 数据层]
-        II_HW[工控机/笔记本电脑]
-        II_Unpack[数据解包与同步]
-        II_Prepro[预处理/滤波降噪]
-        II_Fusion[融合特征向量]:::feature_vec
-    end
-    
-    subgraph III_Algo [III. 算法层]
-        III_MLAlgo(XGBoost / LightGBM)
-        III_Script[实时预测脚本]:::script
-        III_AlgoModel[XGBoost融合校准模型]:::algo_model
-    end
-    
-    subgraph IV_Output [IV. 输出与反馈层]
-        IV_SlumpVal[预测坍落度值]
-        IV_Shap(SHAP值特征重要性图)
+
+    %% 3. 数据处理层
+    subgraph II_Data [II. 数据处理层 - Python/Open3D]
+        II_PC[工控机数据采集]:::software
+        II_Proc[数据解包与预处理]:::software
+        
+        subgraph II_Feat [特征提取]
+            II_F1[物理特征: ΔH/M/T]:::feature
+            II_F2[3D图像特征: 曲率/体积]:::feature
+        end
+        II_Fusion[融合特征向量]:::feature
     end
 
-    %% 建立连接
-    I_HW1 & I_HW2 & I_Cam --> II_HW
-    II_HW --> II_Unpack --> II_Prepro --> II_Fusion
-    II_Fusion --> III_AlgoModel
-    III_MLAlgo --> III_Script --> III_AlgoModel
-    III_AlgoModel --> IV_SlumpVal
-    III_AlgoModel --> IV_Shap
+    %% 4. 算法模型层
+    subgraph III_Algo [III. 算法层 - XGBoost]
+        III_Train[离线模型训练]:::model
+        III_Script[实时预测脚本]:::model
+        III_Final[XGBoost 融合校准模型]:::model
+    end
 
-    %% 应用样式
-    class I_HW1,I_HW2 hardware;
-    class I_LegSens,I_Sens1,I_Sens2,I_Sens3 legacySensors;
-    class I_UpCam,I_Cam upCamera;
-    class II_Data,II_HW,II_Unpack,II_Prepro data_p;
-    class III_Algo algo;
-    class IV_Output output_f;
+    %% 5. 输出层
+    subgraph IV_Out [IV. 输出与反馈层]
+        IV_Disp[现场系统显示]:::result
+        IV_Val[预测坍落度: ±10-15mm]:::result
+        IV_SHAP(SHAP 特征贡献度分析):::result
+    end
+
+    %% 6. 逻辑连接
+    I_Target & I_Motor --> I_Cam & I_LegSens
+    I_Cam & I_LegSens --> II_PC
+    II_PC --> II_Proc --> II_Feat
+    II_F1 & II_F2 --> II_Fusion
+    II_Fusion --> III_Final
+    III_Train --> III_Final
+    III_Script --> III_Final
+    III_Final --> IV_Val
+    IV_Val --> IV_Disp
+    III_Final --> IV_SHAP
+
+    %% 7. 应用嵌套样式
+    class I_LegSens,I_S1,I_S2,I_S3 legacy;
+    class I_UpCam,I_Cam hardware;
+```
